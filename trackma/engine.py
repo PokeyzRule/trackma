@@ -62,6 +62,7 @@ class Engine:
                 'episode_changed':   None,
                 'score_changed':     None,
                 'status_changed':    None,
+                'repeat_changed':    None,
                 'show_synced':       None,
                 'sync_complete':     None,
                 'queue_changed':     None,
@@ -507,6 +508,8 @@ class Engine:
         # Emit signal
         self._emit_signal('episode_changed', show)
 
+        old_status = show['my_status']
+
         # Change status if required
         if self.config['auto_status_change'] and self.mediainfo.get('can_status'):
             try:
@@ -527,8 +530,19 @@ class Engine:
                 # Only warn about engine errors since status change here is not crtical
                 self.msg.warn(self.name, 'Updated episode but status wasn\'t changed: %s' % e)
 
+        new_status = show['my_status']
+
+        # Check if the show is being rewatched or has been rewatched
+        repeat_status = False
+        if self.mediainfo.get('can_repeat'):
+            if (
+                    old_status == self.mediainfo['statuses_start'][-1] or
+                    new_status == self.mediainfo['statuses_start'][-1]
+            ):
+                repeat_status = True
+
         # Change dates if required
-        if self.config['auto_date_change'] and self.mediainfo.get('can_date'):
+        if self.config['auto_date_change'] and self.mediainfo.get('can_date') and not repeat_status:
             start_date = finish_date = None
 
             try:
@@ -650,10 +664,45 @@ class Engine:
         self.msg.info(self.name, "Updating show %s status to %s..." % (show['title'], _statuses[newstatus]))
         self.data_handler.queue_update(show, 'my_status', newstatus)
 
+        # Change repeat if required
+        if self.mediainfo.get('can_repeat'):
+            if (
+                    old_status == self.mediainfo['statuses_start'][-1] or
+                    newstatus == self.mediainfo['statuses_start'][-1]
+            ):
+                newrepeat = show['my_repeat'] + 1
+                try:
+                    self.set_repeat(show['id'], newrepeat)
+                except utils.EngineError as e:
+                    # Only warn about engine errors since repeat change here is not critical
+                    self.msg.warn(self.name, 'Updated status but repeat wasn\'t changed: %s' % e)
+
         # Emit signal
         self._emit_signal('status_changed', show, old_status)
 
         return show
+
+    def set_repeat(self, showid, newrepeat):
+        """
+        Updates the rewatch counter of the specified **showid** to **newrepeat**
+        and queues the list update for the next sync.
+        """
+        # Check if operation is supported by the API
+        if not self.mediainfo.get('can_repeat'):
+            raise utils.EngineError('Operation not supported by API.')
+
+        # Get the show and update it
+        show = self.get_show_info(showid)
+        # More checks
+        if show['my_repeat'] == newrepeat:
+            raise utils.EngineError("Show already at %s repeats" % newrepeat)
+
+        # Change repeat
+        self.msg.info(self.name, "Updating show %s to rewatched $s times" % (show['title'], newrepeat))
+        self.data_handler.queue_update(show, 'my_repeat', newrepeat)
+
+        # Emit signal
+        self._emit_signal('repeat_changed', newrepeat)
 
     def set_tags(self, showid, newtags):
         """

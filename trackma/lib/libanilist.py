@@ -45,6 +45,7 @@ class libanilist(lib):
         'can_score': True,
         'can_status': True,
         'can_update': True,
+        'can_repeat': True,
         'can_play': True,
         'can_date': True,
         'date_next_ep': True,
@@ -71,6 +72,7 @@ class libanilist(lib):
         'can_score': True,
         'can_status': True,
         'can_update': True,
+        'can_repeat': True,
         'can_play': False,
         'can_date': True,
         'statuses_start': ['CURRENT', 'REPEATING'],
@@ -243,6 +245,7 @@ fragment mediaListEntry on MediaList {
   id
   score
   progress
+  repeat
   startedAt { year month day }
   completedAt { year month day }
   media {
@@ -296,6 +299,7 @@ fragment mediaListEntry on MediaList {
                     'my_progress': self._c(item['progress']),
                     'my_status': my_status,
                     'my_score': self._c(item['score']),
+                    'my_repeat': self._c(item['repeat']),
                     'total': self._c(media[self.total_str]),
                     'image': media['coverImage']['large'],
                     'image_thumb': media['coverImage']['medium'],
@@ -318,6 +322,7 @@ fragment mediaListEntry on MediaList {
         'status': 'MediaListStatus',         # The watching/reading status
         'scoreRaw': 'Int',                   # The score of the media in 100 point
         'progress': 'Int',                   # The amount of episodes/chapters consumed by the user
+        'repeat': 'Int',                     # The amount of times the user has rewatched/read the media
         'startedAt': 'FuzzyDateInput',       # When the entry was started by the user
         'completedAt': 'FuzzyDateInput',     # When the entry was completed by the user
     }
@@ -335,6 +340,8 @@ fragment mediaListEntry on MediaList {
             values['status'] = item['my_status']
         if 'my_score' in item:
             values['scoreRaw'] = self._score2raw(item['my_score'])
+        if 'my_repeat' in item:
+            values['repeat'] = item['my_repeat']
         if 'my_start_date' in item:
             values['startedAt'] = self._date2dict(item['my_start_date'])
         if 'my_finish_date' in item:
